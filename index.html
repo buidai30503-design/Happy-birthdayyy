@@ -39,7 +39,7 @@
     @keyframes floatUp{
       0%{ transform: translateY(0) translateX(0) scale(1); opacity:0; }
       8%{ opacity:1; }
-      100%{ transform: translateY(-120vh) translateX(var(--drift)) scale(1.7); opacity:0; }
+      100%{ transform: translateY(-120vh) translateX(var(--drift)) scale(1.6); opacity:0; }
     }
 
     /* question box */
@@ -100,7 +100,6 @@
       color:#1c1c1c;
     }
 
-    /* "No" button will be absolutely positioned inside .btn-row when activated */
     .btn-no{
       background: rgba(255,255,255,.14);
       color:#fff;
@@ -209,6 +208,7 @@
       transition: opacity .55s ease, transform .55s ease;
       text-shadow: 0 12px 30px rgba(0,0,0,.35);
       position:relative;
+      text-align:center;
     }
     .line.show{ opacity:1; transform: translateY(0); }
 
@@ -245,12 +245,41 @@
       backdrop-filter: blur(8px);
       display:none;
     }
+
+    /* ====== IMAGE RAIN ====== */
+    .rain-layer{
+      position:fixed;
+      inset:0;
+      pointer-events:none;
+      z-index: 6; /* dưới popup modal (10) nhưng trên overlay/canvas */
+      display:none;
+      overflow:hidden;
+    }
+    .rain-layer.show{ display:block; }
+
+    .rain-img{
+      position:absolute;
+      top: -160px;
+      width: var(--w);
+      transform: rotate(var(--rot));
+      opacity: var(--op);
+      filter: drop-shadow(0 10px 18px rgba(0,0,0,.25));
+      animation: fall var(--dur) linear forwards;
+      border-radius: 10px;
+    }
+    @keyframes fall{
+      0%{ transform: translateY(0) rotate(var(--rot)); }
+      100%{ transform: translateY(calc(120vh + 200px)) rotate(var(--rot)); }
+    }
   </style>
 </head>
 
 <body>
   <div class="overlay"></div>
   <canvas id="fx"></canvas>
+
+  <!-- Image rain layer -->
+  <div class="rain-layer" id="rainLayer"></div>
 
   <!-- Q1 screen -->
   <div class="screen" id="screen">
@@ -288,7 +317,7 @@
         <button class="close" id="btnClose">Đóng</button>
       </div>
       <div class="photo-wrap">
-        <img src="./anh1.png" alt="Ảnh kỷ niệm">
+        <img src="./anh1.jpg" alt="Ảnh kỷ niệm">
         <div class="caption">
           <span class="line sparkle" id="l1"></span>
           <span class="line sparkle" id="l2"></span>
@@ -335,10 +364,8 @@
       }
     }
 
-    // attempt immediately
     tryAutoplay();
 
-    // if blocked, any user interaction will unlock
     async function unlockMusic(){
       if (musicOn) return;
       try{
@@ -350,10 +377,10 @@
     window.addEventListener("pointerdown", unlockMusic, { once:false });
 
     /* =========================
-       2) BIG HEARTS ALWAYS FLOATING
+       2) HEARTS ALWAYS FLOATING (smaller a bit)
        ========================= */
     const heartIcons = ["💖","💗","💘","💝","💞","💕","❤️","✨"];
-    function spawnBigHeart(){
+    function spawnHeart(){
       const h = document.createElement("div");
       h.className = "heart";
       h.textContent = heartIcons[Math.floor(Math.random()*heartIcons.length)];
@@ -368,13 +395,13 @@
       h.style.setProperty("--drift", drift);
       h.style.animationDuration = dur + "s";
 
-      // TRÁI TIM THẬT TO
-      h.style.fontSize = (Math.random()*46 + 54).toFixed(0) + "px"; // 54px -> 100px
+      // NHỎ HƠN 1 CHÚT (trước 54-100px, giờ 44-78px)
+      h.style.fontSize = (Math.random()*34 + 44).toFixed(0) + "px";
 
       document.body.appendChild(h);
       setTimeout(()=>h.remove(), (parseFloat(dur)+0.3)*1000);
     }
-    setInterval(spawnBigHeart, 220);
+    setInterval(spawnHeart, 240);
 
     /* =========================
        3) FIREWORKS ALWAYS (canvas)
@@ -450,11 +477,9 @@
     /* =========================
        4) QUESTION LOGIC: NO MOVES RANDOMLY
        ========================= */
-    const btnRow = document.getElementById("btnRow");
     const btnNo  = document.getElementById("btnNo");
     const btnYes = document.getElementById("btnYes");
 
-    // Make "No" jump to random position within viewport (not overlapping "Yes" area too closely)
     function moveNoButton(){
       const pad = 12;
       const bw = btnNo.offsetWidth || 110;
@@ -463,24 +488,21 @@
       const vw = window.innerWidth;
       const vh = window.innerHeight;
 
-      // random position
       const x = Math.random() * (vw - bw - pad*2) + pad;
       const y = Math.random() * (vh - bh - pad*2) + pad;
 
-      // transform "No" into fixed positioned element so it can jump anywhere
       btnNo.style.position = "fixed";
       btnNo.style.left = x + "px";
       btnNo.style.top  = y + "px";
       btnNo.style.zIndex = 7;
     }
 
-    // on hover/touch start/click, move
     btnNo.addEventListener("mouseenter", moveNoButton);
     btnNo.addEventListener("touchstart", (e)=>{ e.preventDefault(); moveNoButton(); }, {passive:false});
     btnNo.addEventListener("click", (e)=>{ e.preventDefault(); moveNoButton(); });
 
     /* =========================
-       5) YES -> popup1, after 3s popup2 with open gift
+       5) YES -> popup1 -> popup2 after 3s
        ========================= */
     const screen = document.getElementById("screen");
     const popup1 = document.getElementById("popup1");
@@ -488,7 +510,7 @@
     const btnOpenGift = document.getElementById("btnOpenGift");
 
     btnYes.addEventListener("click", async ()=>{
-      await unlockMusic(); // ensure music plays when user clicks yes
+      await unlockMusic();
       screen.style.display = "none";
 
       popup1.classList.add("show");
@@ -499,7 +521,49 @@
     });
 
     /* =========================
-       6) OPEN GIFT -> show image + sparkling lines sequential
+       6) IMAGE RAIN (anh2.jpg..anh21.jpg) - infinite
+       ========================= */
+    const rainLayer = document.getElementById("rainLayer");
+    const RAIN_IMAGES = Array.from({length: 20}, (_,i)=> `./anh${i+2}.jpg`); // anh2..anh21
+
+    let rainTimer = null;
+
+    function spawnRainImage(){
+      const img = document.createElement("img");
+      img.className = "rain-img";
+
+      const src = RAIN_IMAGES[Math.floor(Math.random()*RAIN_IMAGES.length)];
+      img.src = src;
+
+      const x = Math.random() * (window.innerWidth + 120) - 60;
+      const w = (Math.random()*90 + 60).toFixed(0) + "px"; // 60-150px
+      const rot = (Math.random()*24 - 12).toFixed(1) + "deg";
+      const op  = (Math.random()*0.35 + 0.55).toFixed(2); // 0.55-0.90
+      const dur = (Math.random()*4.2 + 4.0).toFixed(2) + "s"; // 4-8.2s
+
+      img.style.left = x + "px";
+      img.style.setProperty("--w", w);
+      img.style.setProperty("--rot", rot);
+      img.style.setProperty("--op", op);
+      img.style.setProperty("--dur", dur);
+
+      rainLayer.appendChild(img);
+
+      // remove after fall
+      const ms = (parseFloat(dur) + 0.4) * 1000;
+      setTimeout(()=> img.remove(), ms);
+    }
+
+    function startImageRain(){
+      if (rainTimer) return;
+      rainLayer.classList.add("show");
+
+      // spawn quickly for continuous rain
+      rainTimer = setInterval(spawnRainImage, 140);
+    }
+
+    /* =========================
+       7) OPEN GIFT -> start rain + show modal + sparkling lines sequential
        ========================= */
     const modal = document.getElementById("modal");
     const btnClose = document.getElementById("btnClose");
@@ -521,7 +585,11 @@
     }
 
     btnOpenGift.addEventListener("click", async ()=>{
-      await unlockMusic(); // ensure playing
+      await unlockMusic();
+
+      // START IMAGE RAIN INFINITE
+      startImageRain();
+
       popup2.classList.remove("show");
       modal.classList.add("show");
       showWishLines();
