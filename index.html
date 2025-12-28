@@ -127,6 +127,8 @@
       backdrop-filter: blur(10px);
       padding: 20px;
       text-align:center;
+      position:relative;
+      overflow:hidden;
     }
     .ptext{
       font-weight: 900;
@@ -137,6 +139,21 @@
     .gift-btn{
       background: linear-gradient(90deg, #ffffff, #ffe2ee);
       color:#1c1c1c;
+    }
+
+    /* ===== KISS IN POPUP1 ===== */
+    .kiss{
+      font-size: clamp(48px, 9vw, 96px);
+      display:inline-block;
+      margin-bottom: 8px;
+      animation: kissPulse 0.8s ease-in-out infinite;
+      filter: drop-shadow(0 14px 26px rgba(0,0,0,.35));
+    }
+    @keyframes kissPulse{
+      0%   { transform: scale(1.0); }
+      40%  { transform: scale(1.25); }
+      70%  { transform: scale(0.95); }
+      100% { transform: scale(1.22); }
     }
 
     /* Gift modal with photo */
@@ -203,12 +220,17 @@
       font-weight: 950;
       font-size: clamp(16px, 2.4vw, 22px);
       line-height: 1.55;
-      opacity: 0;
-      transform: translateY(14px);
-      transition: opacity .55s ease, transform .55s ease;
       text-shadow: 0 12px 30px rgba(0,0,0,.35);
       position:relative;
       text-align:center;
+
+      /* vẫn giữ show/transition cũ */
+      opacity: 0;
+      transform: translateY(14px);
+      transition: opacity .55s ease, transform .55s ease;
+      white-space: pre-wrap;
+      word-break: break-word;
+      min-height: 1.55em;
     }
     .line.show{ opacity:1; transform: translateY(0); }
 
@@ -251,7 +273,7 @@
       position:fixed;
       inset:0;
       pointer-events:none;
-      z-index: 6; /* dưới popup modal (10) nhưng trên overlay/canvas */
+      z-index: 6;
       display:none;
       overflow:hidden;
     }
@@ -294,9 +316,10 @@
     </div>
   </div>
 
-  <!-- Popup 1 -->
+  <!-- Popup 1 (added kiss) -->
   <div class="popup" id="popup1">
     <div class="popcard">
+      <div class="kiss" aria-hidden="true">💋</div>
       <div class="ptext">Anh cũng yêu emmm</div>
     </div>
   </div>
@@ -395,7 +418,7 @@
       h.style.setProperty("--drift", drift);
       h.style.animationDuration = dur + "s";
 
-      // NHỎ HƠN 1 CHÚT (trước 54-100px, giờ 44-78px)
+      // giữ đúng size nhỏ hơn
       h.style.fontSize = (Math.random()*34 + 44).toFixed(0) + "px";
 
       document.body.appendChild(h);
@@ -525,7 +548,6 @@
        ========================= */
     const rainLayer = document.getElementById("rainLayer");
     const RAIN_IMAGES = Array.from({length: 20}, (_,i)=> `./anh${i+2}.jpg`); // anh2..anh21
-
     let rainTimer = null;
 
     function spawnRainImage(){
@@ -549,7 +571,6 @@
 
       rainLayer.appendChild(img);
 
-      // remove after fall
       const ms = (parseFloat(dur) + 0.4) * 1000;
       setTimeout(()=> img.remove(), ms);
     }
@@ -557,42 +578,66 @@
     function startImageRain(){
       if (rainTimer) return;
       rainLayer.classList.add("show");
-
-      // spawn quickly for continuous rain
       rainTimer = setInterval(spawnRainImage, 140);
     }
 
     /* =========================
-       7) OPEN GIFT -> start rain + show modal + sparkling lines sequential
+       7) OPEN GIFT -> start rain + show modal + TYPEWRITER per character
        ========================= */
     const modal = document.getElementById("modal");
     const btnClose = document.getElementById("btnClose");
 
-    function showWishLines(){
+    function resetLines(){
       const els = [
         document.getElementById("l1"),
         document.getElementById("l2"),
         document.getElementById("l3"),
         document.getElementById("l4"),
       ];
-      els.forEach((el,i)=>{
-        el.textContent = WISH_LINES[i] || "";
+      els.forEach(el=>{
+        el.textContent = "";
         el.classList.remove("show");
       });
-      els.forEach((el,i)=>{
-        setTimeout(()=> el.classList.add("show"), 350 + i*780);
+      return els;
+    }
+
+    // typewriter each character (từng chữ/ ký tự) for each line sequentially
+    function typeLine(el, text, speed=38){
+      return new Promise((resolve)=>{
+        let i = 0;
+        const tick = () => {
+          i++;
+          el.textContent = text.slice(0, i);
+          if (i < text.length) {
+            setTimeout(tick, speed);
+          } else {
+            resolve();
+          }
+        };
+        tick();
       });
+    }
+
+    async function typeAllLines(){
+      const els = resetLines();
+      for (let i=0;i<els.length;i++){
+        const el = els[i];
+        const text = WISH_LINES[i] || "";
+        el.classList.add("show");      // giữ transition hiện dòng
+        await typeLine(el, text, 38);  // gõ từng ký tự
+        await new Promise(r=>setTimeout(r, 420));
+      }
     }
 
     btnOpenGift.addEventListener("click", async ()=>{
       await unlockMusic();
-
-      // START IMAGE RAIN INFINITE
       startImageRain();
 
       popup2.classList.remove("show");
       modal.classList.add("show");
-      showWishLines();
+
+      // chạy chữ từng ký tự
+      typeAllLines();
     });
 
     btnClose.addEventListener("click", ()=> modal.classList.remove("show"));
